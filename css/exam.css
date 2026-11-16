@@ -925,8 +925,8 @@ details summary {
 .info-card dd {
   margin: 0;
 }
-/* Questions 7–9: the question goes above the information, and both fit on a laptop
-   screen without scrolling — the student answers looking at the schedule. */
+/* Questions 7–9: the information while its reading clock runs, then each question
+   alone (the information is gone: the students answer from memory). */
 .info-step h2 {
   font-size: clamp(1.25rem, 2.3vw, 1.7rem);
   margin-bottom: 10px;

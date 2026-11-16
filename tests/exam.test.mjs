@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { PARTS, RESPONSES, INTRO, INFO, SOLUTION, OPINION, TOTAL_POINTS, buildTimeline, timedSeconds, responseOf, solutionSpoken } from '../js/format.js';
+import { PARTS, RESPONSES, INTRO, INFO, SOLUTION, OPINION, TOTAL_POINTS, buildTimeline, timedSeconds, responseOf, solutionSpoken, resumeIndex } from '../js/format.js';
 import { VERSIONS, versionOf, pickVersion, infoText } from '../js/versions.js';
 import { fmt } from '../js/clock.js';
 
@@ -38,6 +38,8 @@ test('the directions say the same clocks', () => {
   assert.match(PARTS.solution.directions, /You will have 30 seconds to prepare\. Then you will have 60 seconds to speak\.$/);
   assert.match(PARTS.opinion.directions, /For each topic, you will have 15 seconds to prepare and 60 seconds to speak\./);
   assert.equal(PARTS.info.time, '30 s to read · 15 s, 15 s and 30 s to speak');
+  // The information is gone after its reading time, and the students are told so.
+  assert.match(PARTS.info.directions, /before the questions begin\. When the reading time is over, the information disappears from the screen\. For each question/);
   assert.match(INTRO, /^This is the Speaking test\. It has three parts\./);
 });
 
@@ -114,6 +116,24 @@ test('every step knows the answer it belongs to', () => {
   assert.equal(responseOf(steps.find((s) => s.type === 'part' && s.part === 'solution')), 'q10');
   assert.equal(responseOf(steps.find((s) => s.type === 'prep' && s.topic === 2)), 'q11b');
   for (const s of steps.filter((x) => x.type === 'response')) assert.equal(responseOf(s), s.id);
+});
+
+test('after a reload: back to the interrupted question, and the information is never read twice', () => {
+  const steps = buildTimeline(VERSIONS[0]);
+  const read = steps.findIndex((s) => s.type === 'prep' && s.part === 'info');
+  const at = (id) => steps.findIndex((s) => s.id === id);
+  // Nothing recorded yet, reloaded during the directions or the reading itself: from the start.
+  assert.equal(resumeIndex(steps, [], 0), 0);
+  assert.equal(resumeIndex(steps, [], read), 0);
+  // Reloaded after the reading time (the caller or Question 7): on to the caller, without the information.
+  assert.equal(resumeIndex(steps, [], read + 1), read + 1);
+  assert.equal(resumeIndex(steps, [], at('q7')), read + 1);
+  assert.equal(steps[read + 1].narrator, true);
+  // After some answers: the question after the last one recorded.
+  assert.equal(resumeIndex(steps, ['q7'], at('q8')), at('q7') + 1);
+  assert.equal(resumeIndex(steps, ['q7', 'q8', 'q9', 'q10'], at('q11a')), at('q10') + 1);
+  // Old sessions without the step they reached work as before.
+  assert.equal(resumeIndex(steps, ['q7']), at('q7') + 1);
 });
 
 test('the quick demo shortens every clock but keeps at least 3 seconds', () => {

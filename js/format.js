@@ -24,6 +24,7 @@ export const PARTS = {
     directions:
       'In this part of the test, you will answer three questions based on the information provided. ' +
       `You will have ${secs(INFO.read)} to read the information before the questions begin. ` +
+      'When the reading time is over, the information disappears from the screen. ' +
       'For each question, begin responding immediately after you hear a beep. No additional preparation time is provided. ' +
       `You will have ${secs(SHORT)} to respond to Questions 7 and 8 and ${secs(LONG)} to respond to Question 9.`,
     time: `${INFO.read} s to read · ${INFO.responses.join(' s, ').replace(/, (\d+)$/, ' and $1')} s to speak`,
@@ -134,4 +135,15 @@ export function responseOf(step) {
   if (step.topic) return `q11${LETTERS[step.topic - 1]}`;
   if (step.part === 'solution') return 'q10';
   return null;
+}
+
+// After a reload: start again from the question that was interrupted. The
+// information of Questions 7–9 is shown only once: a student who had already
+// gone past its reading time doesn't get to read it again by reloading.
+export function resumeIndex(steps, done, reached = 0) {
+  let last = -1;
+  steps.forEach((s, i) => s.type === 'response' && done.includes(s.id) && (last = i));
+  const read = steps.findIndex((s) => s.type === 'prep' && s.part === 'info');
+  const at = last + 1;
+  return read >= 0 && reached > read && at <= read ? read + 1 : at;
 }

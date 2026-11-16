@@ -15,8 +15,9 @@ Es **aparte** del primer *Speaking Exam* (Questions 1–7): otra página, otro s
 | **Question 11** · Express an opinion | Tres temas, uno por uno (la adaptación de clase de la práctica: tres temas en vez de uno) | cada tema: 15 s para preparar · 60 s para hablar |
 
 Son **7 respuestas grabadas** y unos 10 minutos. Las consignas, las preguntas, el mensaje y los temas se oyen (voz del
-navegador) y se leen en pantalla. El horario aparece cuando empieza su reloj de lectura y queda a la vista mientras
-responden las Questions 7–9.
+navegador) y se leen en pantalla. El horario aparece cuando empieza su reloj de lectura y **desaparece cuando se acaba
+el tiempo**: las Questions 7–9 se responden de memoria (la consigna se lo avisa a los estudiantes). Si alguien recarga la
+página después de leerlo, no lo vuelve a ver.
 
 **Dos versiones**, con el mismo formato y la misma dificultad, y ninguna repite nada de las prácticas A y B que ya
 hicieron los estudiantes:

@@ -1,10 +1,10 @@
-import { PARTS, RESPONSES, INTRO, OPINION, TOTAL_POINTS, buildTimeline, timedSeconds, responseOf } from './format.js?v=202611161709';
-import { VERSIONS, versionOf, pickVersion } from './versions.js?v=202611161709';
-import { clockHtml, runClock, idleClock, fmt } from './clock.js?v=202611161709';
-import { unlockAudio, beep, speak, stopSpeaking, openMicrophone, closeMicrophone, levelMeter, startRecording } from './audio.js?v=202611161709';
-import { scriptUrl, saveScriptUrl, isScriptUrl, ping, report, enqueue, onUpload, pendingUploads, resumeUploads } from './api.js?v=202611161709';
-import { saveRecording, allRecordings } from './store.js?v=202611161709';
-import { TEACHER_CODE, SCRIPT_VERSION, SCRIPT_APP } from './config.js?v=202611161709';
+import { PARTS, RESPONSES, INTRO, OPINION, TOTAL_POINTS, buildTimeline, timedSeconds, responseOf, resumeIndex } from './format.js?v=202611161718';
+import { VERSIONS, versionOf, pickVersion } from './versions.js?v=202611161718';
+import { clockHtml, runClock, idleClock, fmt } from './clock.js?v=202611161718';
+import { unlockAudio, beep, speak, stopSpeaking, openMicrophone, closeMicrophone, levelMeter, startRecording } from './audio.js?v=202611161718';
+import { scriptUrl, saveScriptUrl, isScriptUrl, ping, report, enqueue, onUpload, pendingUploads, resumeUploads } from './api.js?v=202611161718';
+import { saveRecording, allRecordings } from './store.js?v=202611161718';
+import { TEACHER_CODE, SCRIPT_VERSION, SCRIPT_APP } from './config.js?v=202611161718';
 
 const app = document.getElementById('app');
 const params = new URLSearchParams(location.search);
@@ -289,14 +289,15 @@ function taskHtml(step, v, label = who()) {
   const head = `<p class="task-label">${esc(where)}</p><h2>${esc(p.title)}</h2>`;
   const directions = `<p class="directions"><b>Directions:</b> ${esc(p.directions)}</p>`;
   if (step.part === 'info') {
-    // The information appears only when its reading clock starts: during the
-    // directions there is nothing to read, so everyone gets the same 30 seconds.
+    // The information is on the screen only while its reading clock runs: it
+    // appears when the clock starts (during the directions there is nothing to
+    // read, so everyone gets the same 30 seconds) and is gone when the time is
+    // up. The questions are answered from memory, as the teacher asked.
     if (step.type === 'part') return head + directions;
-    // Above the information: the caller's line while it is heard, then each question.
-    // Kept short, so the whole schedule stays in view while the student answers.
+    if (step.type === 'prep') return `<div class="info-step">${head}${infoHtml(v.info)}</div>`;
     const caller = step.narrator ? `<p class="narrator"><span>Caller</span>${esc(v.info.narrator)}</p>` : '';
     const question = step.question ? questionHtml(step.question, v.info.questions[step.question - 7]) : '';
-    return `<div class="info-step">${head}${caller}${question}${infoHtml(v.info)}</div>`;
+    return `<div class="info-step">${head}${caller}${question}</div>`;
   }
   if (step.part === 'solution') {
     if (step.type === 'part') return head + directions + roleHtml(v.solution);
@@ -413,12 +414,6 @@ async function runExam() {
   renderDone();
 }
 
-// After a reload: start again from the question that was interrupted.
-function resumeIndex(steps, done) {
-  let last = -1;
-  steps.forEach((s, i) => s.type === 'response' && done.includes(s.id) && (last = i));
-  return last + 1;
-}
 
 // ─── 4 · the end ────────────────────────────────────────────────────────────
 
@@ -801,7 +796,7 @@ function start() {
   if (saved && !versionOf(saved.version)) clearSession();
   else if (saved && !saved.finished) {
     S = { ...saved, steps: timeline(saved.version) };
-    S.stepIndex = resumeIndex(S.steps, S.done);
+    S.stepIndex = resumeIndex(S.steps, S.done, saved.stepIndex || 0);
     S.resumed = (S.resumed || 0) + 1;
     persist();
     return renderCheck(true);
