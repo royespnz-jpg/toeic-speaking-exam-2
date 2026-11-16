@@ -1,0 +1,16 @@
+{
+  "name": "toeic-speaking-exam-2",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A timed speaking exam in the format of Questions 7–11 of the TOEIC Speaking test (respond using information provided, propose a solution, express an opinion), with automatic recording and the teacher's Google Apps Script.",
+  "type": "module",
+  "scripts": {
+    "start": "node scripts/serve.mjs",
+    "test": "node --test",
+    "gs": "node scripts/exam-gs.mjs && node scripts/split-gs.mjs",
+    "version": "node scripts/version.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
