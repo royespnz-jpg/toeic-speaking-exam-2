@@ -65,7 +65,7 @@ esa. La planilla dice qué versión hizo cada uno.
    > ves esa última línea, se cortó al pegar. Después seguí igual (`setup`, implementar).
 2. **Implementar → Nueva implementación → Aplicación web** · Ejecutar como: **Yo** · Quién tiene acceso: **Cualquier
    persona** → copiá la URL que termina en `/exec`.
-3. **En el examen**, abrí la página **Teacher** (`…/#teacher`, código **1234**): pegá la URL, *Test*, *Save*. Ahí están
+3. **En el examen**, abrí la página **Teacher** (`…/#teacher`, código **6060**): pegá la URL, *Test*, *Save*. Ahí están
    los links para los estudiantes (uno con las versiones por turno y uno por versión), todo lo que pregunta cada versión, una **vista
    previa** de cada paso (sin grabar nada) y un link para probar el examen completo (queda marcado *demo* en la planilla).
    Para que no haga falta pegarla en cada computadora, la URL también puede ir en [`js/config.js`](js/config.js)

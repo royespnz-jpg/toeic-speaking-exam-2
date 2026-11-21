@@ -10,7 +10,7 @@ export const RETIRED_URLS = [];
 // The code that opens the teacher pages (set-up, the versions and the
 // preview). It keeps students out of them during the exam; it is not a
 // password: anyone who reads the page's code can find it.
-export const TEACHER_CODE = '1234';
+export const TEACHER_CODE = '6060';
 
 // The google-apps-script/Code.gs this page expects (its doGet says which one
 // is deployed). Version 2 hands out the versions in turn; with an older one
