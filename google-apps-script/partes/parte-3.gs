@@ -2,7 +2,10 @@
 
 function setup() {
   return withLock_(function () {
-    Object.keys(SHEETS).forEach(function (k) { sheet_(k); });
+    /* The first row again, in case the exam changed (the total says how many points). */
+    Object.keys(SHEETS).forEach(function (k) {
+      sheet_(k).getRange(1, 1, 1, SHEETS[k].headers.length).setValues([SHEETS[k].headers]).setFontWeight('bold');
+    });
     reference_('rubric', RUBRIC);
     reference_('exam', examRows_());
     rootFolder_();
@@ -25,6 +28,7 @@ function doGet() {
 function doPost(e) {
   try {
     const data = JSON.parse((e && e.postData && e.postData.contents) || '{}');
+    if (data.type === 'version') return json_(withLock_(nextVersion_));
     if (data.type === 'start') return json_(withLock_(function () { return start_(data); }));
     if (data.type === 'recording') return json_(recording_(data));
     if (data.type === 'finish') return json_(withLock_(function () { return finish_(data); }));
@@ -77,6 +81,17 @@ function finish_(d) {
   sheet.getRange(row, EX.left).setValue(Number(d.leftPage) || 0);
   sheet.getRange(row, EX.restarts).setValue(Number(d.resumed) || 0);
   return { ok: true };
+}
+
+/* The general link: the versions go in turn (1, 2, 1, 2…), so a student never gets
+   the same version as the one who started just before. The first one is by chance. */
+function nextVersion_() {
+  const count = examRows_().reduce(function (n, r) { return Math.max(n, Number(r[0]) || 0); }, 0) || 1;
+  const props = PropertiesService.getScriptProperties();
+  const last = Number(props.getProperty('LAST_VERSION')) || 0;
+  const next = last >= 1 && last <= count ? (last % count) + 1 : 1 + Math.floor(Math.random() * count);
+  props.setProperty('LAST_VERSION', String(next));
+  return { ok: true, version: next };
 }
 
 /* ── fin de la parte 3 de 5 ── */

@@ -9,7 +9,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { RESPONSES, PARTS } from '../js/format.js';
+import { RESPONSES, PARTS, PARTS_ON } from '../js/format.js';
 import { VERSIONS } from '../js/versions.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -20,21 +20,26 @@ export const answerRows = () => RESPONSES.map((r) => [r.id, r.label, r.max]);
 export const answersBlock = () => `const ANSWERS = [\n${answerRows().map((row) => `  ${JSON.stringify(row)},`).join('\n')}\n];`;
 export const ANSWERS_RE = /const ANSWERS = \[\n[\s\S]*?\];/;
 
-// What a version asks, one row per item: version, item, text.
-export function versionRows(v) {
-  return [
-    [v.n, 'Information', v.info.title],
-    ...v.info.rows.map(([time, what]) => [v.n, time, what]),
-    ...v.info.details.map(([k, text]) => [v.n, k, text]),
-    [v.n, 'Caller', v.info.narrator],
-    ...v.info.questions.map((q, i) => [v.n, `Question ${7 + i}`, q]),
-    [v.n, 'Question 10 · Role', `${v.solution.role} In your response, be sure to ${PARTS.solution.mustDo.join(' ')}`],
-    [v.n, 'Question 10 · Message', v.solution.message],
-    ...v.opinion.map((t, i) => [v.n, `Question 11 · Topic ${i + 1}`, t]),
-  ];
+// What a version asks in the parts the exam gives, one row per item: version, item, text.
+export function versionRows(v, parts = PARTS_ON) {
+  const rows = {
+    info: () => [
+      [v.n, 'Information', v.info.title],
+      ...v.info.rows.map(([time, what]) => [v.n, time, what]),
+      ...v.info.details.map(([k, text]) => [v.n, k, text]),
+      [v.n, 'Caller', v.info.narrator],
+      ...v.info.questions.map((q, i) => [v.n, `Question ${7 + i}`, q]),
+    ],
+    solution: () => [
+      [v.n, 'Question 10 · Role', `${v.solution.role} In your response, be sure to ${PARTS.solution.mustDo.join(' ')}`],
+      [v.n, 'Question 10 · Message', v.solution.message],
+    ],
+    opinion: () => v.opinion.map((t, i) => [v.n, `Question 11 · Topic ${i + 1}`, t]),
+  };
+  return parts.flatMap((id) => rows[id]());
 }
 
-export const examRows = () => VERSIONS.flatMap(versionRows);
+export const examRows = () => VERSIONS.flatMap((v) => versionRows(v));
 
 // Each version goes in its own part of the script, so every part stays short enough to paste.
 export function examBlock() {

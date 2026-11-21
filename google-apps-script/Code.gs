@@ -18,17 +18,13 @@
  */
 
 const APP = 'Speaking Exam II';
-const VERSION = 1;
+const VERSION = 2;
 const ROOT_FOLDER = 'Speaking Exam II — Recordings';
 /* The recorded answers: id, label and highest score. Made from js/format.js: npm run gs. */
 const ANSWERS = [
   ["q7","Question 7",3],
   ["q8","Question 8",3],
   ["q9","Question 9",3],
-  ["q10","Question 10",5],
-  ["q11a","Question 11 · Topic 1",5],
-  ["q11b","Question 11 · Topic 2",5],
-  ["q11c","Question 11 · Topic 3",5],
 ];
 const QUESTIONS = ANSWERS.map(function (a) { return a[0]; });
 const LABELS = {};
@@ -85,11 +81,6 @@ const EXAM_ROWS_1 = [
   [1,"Question 7","What is the date of the workshop, and what time does check-in begin?"],
   [1,"Question 8","I am a university student. How much will I have to pay, and when do I need to register?"],
   [1,"Question 9","I want to learn how to promote my products with social media and photos. Could you tell me about the sessions on those topics?"],
-  [1,"Question 10 · Role","Respond as if you work at a car rental agency. In your response, be sure to show that you recognize the problem, and propose a way of dealing with the problem."],
-  [1,"Question 10 · Message","Hi, this is Karen Mitchell. I reserved a seven-passenger van from your agency for this weekend because my family is driving to my sister’s wedding. When I came to pick it up this morning, your employee told me that only small cars were available. There are seven of us, and we have a lot of luggage. The wedding is tomorrow afternoon, three hours away. Please call me back and tell me how you will solve this problem."],
-  [1,"Question 11 · Topic 1","Some people believe that high schools should teach students how to manage money. Do you agree or disagree?"],
-  [1,"Question 11 · Topic 2","Some people prefer to work for a large company, while others prefer to work for a small business. Which would you prefer?"],
-  [1,"Question 11 · Topic 3","Some people believe that people today spend too much time on social media. Do you agree or disagree?"],
 ];
 
 /* ✂ */
@@ -112,11 +103,6 @@ const EXAM_ROWS_2 = [
   [2,"Question 7","Where will the seminar be held, and what time does sign-in begin?"],
   [2,"Question 8","Two of my coworkers want to come with me. How much will each of us pay, and is lunch included?"],
   [2,"Question 9","I get very nervous when I speak in front of people, and I never know how to plan what I am going to say. Which morning sessions would help me with that?"],
-  [2,"Question 10 · Role","Respond as if you are the manager of a restaurant. In your response, be sure to show that you recognize the problem, and propose a way of dealing with the problem."],
-  [2,"Question 10 · Message","Hello, this is Robert Hayes. Two weeks ago, I reserved the private dining room at your restaurant for my parents’ anniversary dinner this Saturday at seven o’clock. I have already invited thirty guests. This morning, one of your employees called to say that the room was booked for another event at the same time by mistake. I cannot change the date because some relatives are flying in for the party. Please call me back and tell me what you can do."],
-  [2,"Question 11 · Topic 1","Some people believe that students learn more by working in groups than by studying alone. Do you agree or disagree?"],
-  [2,"Question 11 · Topic 2","Some people prefer a job with a high salary and long hours, while others prefer a job with a lower salary and more free time. Which would you choose?"],
-  [2,"Question 11 · Topic 3","Some people believe that shopping online is better than shopping in stores. Do you agree or disagree?"],
 ];
 
 function examRows_() {
@@ -179,7 +165,10 @@ const RUBRIC = [
 
 function setup() {
   return withLock_(function () {
-    Object.keys(SHEETS).forEach(function (k) { sheet_(k); });
+    /* The first row again, in case the exam changed (the total says how many points). */
+    Object.keys(SHEETS).forEach(function (k) {
+      sheet_(k).getRange(1, 1, 1, SHEETS[k].headers.length).setValues([SHEETS[k].headers]).setFontWeight('bold');
+    });
     reference_('rubric', RUBRIC);
     reference_('exam', examRows_());
     rootFolder_();
@@ -202,6 +191,7 @@ function doGet() {
 function doPost(e) {
   try {
     const data = JSON.parse((e && e.postData && e.postData.contents) || '{}');
+    if (data.type === 'version') return json_(withLock_(nextVersion_));
     if (data.type === 'start') return json_(withLock_(function () { return start_(data); }));
     if (data.type === 'recording') return json_(recording_(data));
     if (data.type === 'finish') return json_(withLock_(function () { return finish_(data); }));
@@ -254,6 +244,17 @@ function finish_(d) {
   sheet.getRange(row, EX.left).setValue(Number(d.leftPage) || 0);
   sheet.getRange(row, EX.restarts).setValue(Number(d.resumed) || 0);
   return { ok: true };
+}
+
+/* The general link: the versions go in turn (1, 2, 1, 2…), so a student never gets
+   the same version as the one who started just before. The first one is by chance. */
+function nextVersion_() {
+  const count = examRows_().reduce(function (n, r) { return Math.max(n, Number(r[0]) || 0); }, 0) || 1;
+  const props = PropertiesService.getScriptProperties();
+  const last = Number(props.getProperty('LAST_VERSION')) || 0;
+  const next = last >= 1 && last <= count ? (last % count) + 1 : 1 + Math.floor(Math.random() * count);
+  props.setProperty('LAST_VERSION', String(next));
+  return { ok: true, version: next };
 }
 
 /* ✂ */

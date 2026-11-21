@@ -101,8 +101,9 @@ export const VERSIONS = [
 
 export const versionOf = (n) => VERSIONS.find((v) => v.n === Number(n)) || null;
 
-// The version a student gets: the one the teacher's link names (?v=2), or
-// else one of them by chance, so that neighbours rarely get the same one.
+// The version a student gets without the teacher's script (the script hands
+// them out in turn): the one the teacher's link names (?v=2), or else one of
+// them by chance.
 export function pickVersion(asked, random = Math.random) {
   const fixed = versionOf(asked);
   if (fixed) return fixed.n;

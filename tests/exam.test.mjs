@@ -1,9 +1,14 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { PARTS, RESPONSES, INTRO, INFO, SOLUTION, OPINION, TOTAL_POINTS, buildTimeline, timedSeconds, responseOf, solutionSpoken, resumeIndex } from '../js/format.js';
+import {
+  PARTS, PARTS_ON, ALL_PARTS, RESPONSES, INTRO, INFO, SOLUTION, OPINION, TOTAL_POINTS, introFor, responsesOf,
+  buildTimeline, timedSeconds, responseOf, solutionSpoken, resumeIndex,
+} from '../js/format.js';
 import { VERSIONS, versionOf, pickVersion, infoText } from '../js/versions.js';
 import { fmt } from '../js/clock.js';
 
+// The whole format (Questions 10 and 11 are off for now, but their steps stay tested for when they come back).
+const FULL = { parts: ALL_PARTS };
 const repeated = (list) => list.filter((x, i) => list.indexOf(x) !== i);
 const words = (s) => s.match(/[A-Za-z’'-]+/g) || [];
 // A clock time as minutes after midnight: "12:15 p.m." → 735.
@@ -17,7 +22,7 @@ test('the clocks of Questions 7–11: 30 s to read, 15-15-30, 30 + 60, and three
   assert.deepEqual(SOLUTION, { prep: 30, response: 60 });
   assert.deepEqual(OPINION, { prep: 15, response: 60, topics: 3 });
   for (const v of VERSIONS) {
-    const steps = buildTimeline(v);
+    const steps = buildTimeline(v, FULL);
     assert.deepEqual(
       steps.filter((s) => s.seconds).map((s) => `${s.type}:${s.id || s.part}:${s.seconds}`),
       [
@@ -28,23 +33,41 @@ test('the clocks of Questions 7–11: 30 s to read, 15-15-30, 30 + 60, and three
       `version ${v.n}`,
     );
     assert.equal(timedSeconds(steps), 405);
-    assert.deepEqual(steps.filter((s) => s.type === 'response').map((s) => s.id), RESPONSES.map((r) => r.id));
+    assert.deepEqual(steps.filter((s) => s.type === 'response').map((s) => s.id), responsesOf(ALL_PARTS).map((r) => r.id));
   }
+});
+
+test('for now the exam gives Questions 7–9 only: three answers, 9 points, a minute and a half on the clock', () => {
+  assert.deepEqual(PARTS_ON, ['info']);
+  assert.deepEqual(RESPONSES.map((r) => r.id), ['q7', 'q8', 'q9']);
+  assert.equal(TOTAL_POINTS, 9);
+  for (const v of VERSIONS) {
+    const steps = buildTimeline(v);
+    assert.deepEqual(steps.map((s) => s.part || s.type), ['intro', ...Array(9).fill('info')], `version ${v.n}`);
+    assert.equal(timedSeconds(steps), 90);
+    assert.equal(steps[0].say, INTRO);
+  }
+  assert.equal(INTRO, introFor(['info']));
+  assert.doesNotMatch(INTRO, /Question 1[01]|three parts/);
 });
 
 test('the directions say the same clocks', () => {
   assert.match(PARTS.info.directions, /You will have 30 seconds to read the information before the questions begin\./);
   assert.match(PARTS.info.directions, /You will have 15 seconds to respond to Questions 7 and 8 and 30 seconds to respond to Question 9\.$/);
-  assert.match(PARTS.solution.directions, /You will have 30 seconds to prepare\. Then you will have 60 seconds to speak\.$/);
+  assert.match(PARTS.solution.directions, /You will have 30 seconds to prepare\. Then you will have 60 seconds to speak\. /);
   assert.match(PARTS.opinion.directions, /For each topic, you will have 15 seconds to prepare and 60 seconds to speak\./);
+  // The message of Question 10 and the topics of Question 11 are gone while they are answered, and the students are told so.
+  assert.match(PARTS.solution.directions, /to speak\. When the preparation time is over, the message disappears from the screen\.$/);
+  assert.match(PARTS.opinion.directions, /to speak\. When the preparation time is over, the topic disappears from the screen\. Give reasons/);
   assert.equal(PARTS.info.time, '30 s to read · 15 s, 15 s and 30 s to speak');
-  // The information is gone after its reading time, and the students are told so.
-  assert.match(PARTS.info.directions, /before the questions begin\. When the reading time is over, the information disappears from the screen\. For each question/);
-  assert.match(INTRO, /^This is the Speaking test\. It has three parts\./);
+  // The information stays on the screen; the questions are only heard. The students are told so.
+  assert.match(PARTS.info.directions, /before the questions begin\. The information stays on the screen until the end of this part\. You will hear the questions, but you will not see them\. For each question/);
+  assert.match(introFor(ALL_PARTS), /^This is the Speaking test\. It has three parts\. In Questions 7 to 9, /);
+  assert.match(INTRO, /^This is the Speaking test\. In Questions 7 to 9, you will answer three questions using the information on your screen\. The test runs by itself/);
 });
 
-test('seven recorded answers: 0–3 for Questions 7–9, 0–5 for Questions 10 and 11', () => {
-  assert.deepEqual(RESPONSES.map((r) => [r.id, r.label, r.max]), [
+test('the whole format has seven recorded answers: 0–3 for Questions 7–9, 0–5 for Questions 10 and 11', () => {
+  assert.deepEqual(responsesOf(ALL_PARTS).map((r) => [r.id, r.label, r.max]), [
     ['q7', 'Question 7', 3],
     ['q8', 'Question 8', 3],
     ['q9', 'Question 9', 3],
@@ -53,9 +76,9 @@ test('seven recorded answers: 0–3 for Questions 7–9, 0–5 for Questions 10 
     ['q11b', 'Question 11 · Topic 2', 5],
     ['q11c', 'Question 11 · Topic 3', 5],
   ]);
-  assert.equal(TOTAL_POINTS, 29);
+  assert.equal(responsesOf(ALL_PARTS).reduce((n, r) => n + r.max, 0), 29);
   // The script takes these ids as they are (letters, digits, - and _).
-  for (const r of RESPONSES) assert.match(r.id, /^[\w-]+$/);
+  for (const r of responsesOf(ALL_PARTS)) assert.match(r.id, /^[\w-]+$/);
 });
 
 test('Questions 7–9: the directions, the reading clock, the caller, then each question and its answer', () => {
@@ -79,7 +102,7 @@ test('Questions 7–9: the directions, the reading clock, the caller, then each 
 
 test('Question 10: the role and the message are heard before the time to prepare', () => {
   const v = VERSIONS[1];
-  const steps = buildTimeline(v);
+  const steps = buildTimeline(v, FULL);
   const at = steps.findIndex((s) => s.type === 'part' && s.part === 'solution');
   assert.match(steps[at].say, /^Question 10\. Propose a solution\. In this part of the test/);
   assert.ok(steps[at].say.endsWith(solutionSpoken(v.solution)));
@@ -97,7 +120,7 @@ test('Question 10: the role and the message are heard before the time to prepare
 
 test('Question 11: each topic is heard, prepared and answered before the next one', () => {
   const v = VERSIONS[0];
-  const steps = buildTimeline(v);
+  const steps = buildTimeline(v, FULL);
   const at = steps.findIndex((s) => s.type === 'part' && s.part === 'opinion');
   assert.deepEqual(
     steps.slice(at + 1).map((s) => `${s.type}:${s.topic}`),
@@ -109,7 +132,7 @@ test('Question 11: each topic is heard, prepared and answered before the next on
 });
 
 test('every step knows the answer it belongs to', () => {
-  const steps = buildTimeline(VERSIONS[0]);
+  const steps = buildTimeline(VERSIONS[0], FULL);
   assert.equal(responseOf(steps[0]), null);
   assert.equal(responseOf(steps.find((s) => s.type === 'part' && s.part === 'info')), null);
   assert.equal(responseOf(steps.find((s) => s.type === 'say' && s.question === 8)), 'q8');
@@ -118,26 +141,40 @@ test('every step knows the answer it belongs to', () => {
   for (const s of steps.filter((x) => x.type === 'response')) assert.equal(responseOf(s), s.id);
 });
 
-test('after a reload: back to the interrupted question, and the information is never read twice', () => {
-  const steps = buildTimeline(VERSIONS[0]);
+test('after a reload: back to the interrupted question; what left the screen is not shown again', () => {
+  const steps = buildTimeline(VERSIONS[0], FULL);
   const read = steps.findIndex((s) => s.type === 'prep' && s.part === 'info');
   const at = (id) => steps.findIndex((s) => s.id === id);
   // Nothing recorded yet, reloaded during the directions or the reading itself: from the start.
   assert.equal(resumeIndex(steps, [], 0), 0);
   assert.equal(resumeIndex(steps, [], read), 0);
-  // Reloaded after the reading time (the caller or Question 7): on to the caller, without the information.
+  // Reloaded after the reading time (the caller or Question 7): on to the caller, without a second reading time.
   assert.equal(resumeIndex(steps, [], read + 1), read + 1);
   assert.equal(resumeIndex(steps, [], at('q7')), read + 1);
   assert.equal(steps[read + 1].narrator, true);
-  // After some answers: the question after the last one recorded.
+  // After some answers: the question after the last one recorded (heard again, for Questions 7–9).
   assert.equal(resumeIndex(steps, ['q7'], at('q8')), at('q7') + 1);
-  assert.equal(resumeIndex(steps, ['q7', 'q8', 'q9', 'q10'], at('q11a')), at('q10') + 1);
+  // Reloaded while preparing Question 10 or a topic of Question 11: the message or the topic again, from its start.
+  assert.equal(resumeIndex(steps, ['q7', 'q8', 'q9'], at('q10') - 1), at('q9') + 1);
+  assert.equal(resumeIndex(steps, ['q7', 'q8', 'q9', 'q10'], at('q11a') - 1), at('q10') + 1);
+  assert.equal(resumeIndex(steps, ['q7', 'q8', 'q9', 'q10', 'q11a'], at('q11b') - 1), at('q11a') + 1);
+  // Reloaded while answering them (the message or the topic already gone): straight back to answering.
+  assert.equal(resumeIndex(steps, ['q7', 'q8', 'q9'], at('q10')), at('q10'));
+  assert.equal(resumeIndex(steps, ['q7', 'q8', 'q9', 'q10'], at('q11a')), at('q11a'));
+  assert.equal(resumeIndex(steps, ['q7', 'q8', 'q9', 'q10', 'q11a', 'q11b'], at('q11c')), at('q11c'));
+  assert.equal(steps[at('q10')].say, 'Begin speaking now.', 'the answer starts with its cue and the beep');
   // Old sessions without the step they reached work as before.
   assert.equal(resumeIndex(steps, ['q7']), at('q7') + 1);
+  // The exam as it is now (Questions 7–9 only) resumes the same way.
+  const now = buildTimeline(VERSIONS[0]);
+  const q8 = now.findIndex((s) => s.id === 'q8');
+  assert.equal(resumeIndex(now, ['q7'], q8), q8 - 1);
+  assert.equal(now[q8 - 1].question, 8);
 });
 
 test('the quick demo shortens every clock but keeps at least 3 seconds', () => {
-  assert.deepEqual(buildTimeline(VERSIONS[0], { scale: 0.1 }).filter((s) => s.seconds).map((s) => s.seconds), [3, 3, 3, 3, 3, 6, 3, 6, 3, 6, 3, 6]);
+  assert.deepEqual(buildTimeline(VERSIONS[0], { scale: 0.1, ...FULL }).filter((s) => s.seconds).map((s) => s.seconds), [3, 3, 3, 3, 3, 6, 3, 6, 3, 6, 3, 6]);
+  assert.deepEqual(buildTimeline(VERSIONS[0], { scale: 0.1 }).filter((s) => s.seconds).map((s) => s.seconds), [3, 3, 3, 3]);
   assert.ok(buildTimeline(VERSIONS[0], { scale: 0.01 }).filter((s) => s.seconds).every((s) => s.seconds === 3));
 });
 

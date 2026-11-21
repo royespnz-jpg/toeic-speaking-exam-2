@@ -18,11 +18,6 @@ const EXAM_ROWS_2 = [
   [2,"Question 7","Where will the seminar be held, and what time does sign-in begin?"],
   [2,"Question 8","Two of my coworkers want to come with me. How much will each of us pay, and is lunch included?"],
   [2,"Question 9","I get very nervous when I speak in front of people, and I never know how to plan what I am going to say. Which morning sessions would help me with that?"],
-  [2,"Question 10 · Role","Respond as if you are the manager of a restaurant. In your response, be sure to show that you recognize the problem, and propose a way of dealing with the problem."],
-  [2,"Question 10 · Message","Hello, this is Robert Hayes. Two weeks ago, I reserved the private dining room at your restaurant for my parents’ anniversary dinner this Saturday at seven o’clock. I have already invited thirty guests. This morning, one of your employees called to say that the room was booked for another event at the same time by mistake. I cannot change the date because some relatives are flying in for the party. Please call me back and tell me what you can do."],
-  [2,"Question 11 · Topic 1","Some people believe that students learn more by working in groups than by studying alone. Do you agree or disagree?"],
-  [2,"Question 11 · Topic 2","Some people prefer a job with a high salary and long hours, while others prefer a job with a lower salary and more free time. Which would you choose?"],
-  [2,"Question 11 · Topic 3","Some people believe that shopping online is better than shopping in stores. Do you agree or disagree?"],
 ];
 
 function examRows_() {

@@ -20,17 +20,13 @@
  */
 
 const APP = 'Speaking Exam II';
-const VERSION = 1;
+const VERSION = 2;
 const ROOT_FOLDER = 'Speaking Exam II — Recordings';
 /* The recorded answers: id, label and highest score. Made from js/format.js: npm run gs. */
 const ANSWERS = [
   ["q7","Question 7",3],
   ["q8","Question 8",3],
   ["q9","Question 9",3],
-  ["q10","Question 10",5],
-  ["q11a","Question 11 · Topic 1",5],
-  ["q11b","Question 11 · Topic 2",5],
-  ["q11c","Question 11 · Topic 3",5],
 ];
 const QUESTIONS = ANSWERS.map(function (a) { return a[0]; });
 const LABELS = {};
@@ -87,11 +83,6 @@ const EXAM_ROWS_1 = [
   [1,"Question 7","What is the date of the workshop, and what time does check-in begin?"],
   [1,"Question 8","I am a university student. How much will I have to pay, and when do I need to register?"],
   [1,"Question 9","I want to learn how to promote my products with social media and photos. Could you tell me about the sessions on those topics?"],
-  [1,"Question 10 · Role","Respond as if you work at a car rental agency. In your response, be sure to show that you recognize the problem, and propose a way of dealing with the problem."],
-  [1,"Question 10 · Message","Hi, this is Karen Mitchell. I reserved a seven-passenger van from your agency for this weekend because my family is driving to my sister’s wedding. When I came to pick it up this morning, your employee told me that only small cars were available. There are seven of us, and we have a lot of luggage. The wedding is tomorrow afternoon, three hours away. Please call me back and tell me how you will solve this problem."],
-  [1,"Question 11 · Topic 1","Some people believe that high schools should teach students how to manage money. Do you agree or disagree?"],
-  [1,"Question 11 · Topic 2","Some people prefer to work for a large company, while others prefer to work for a small business. Which would you prefer?"],
-  [1,"Question 11 · Topic 3","Some people believe that people today spend too much time on social media. Do you agree or disagree?"],
 ];
 
 /* ── fin de la parte 1 de 5 ── */

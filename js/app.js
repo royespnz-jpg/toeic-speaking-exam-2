@@ -1,10 +1,10 @@
-import { PARTS, RESPONSES, INTRO, OPINION, TOTAL_POINTS, buildTimeline, timedSeconds, responseOf, resumeIndex } from './format.js?v=202611161718';
-import { VERSIONS, versionOf, pickVersion } from './versions.js?v=202611161718';
-import { clockHtml, runClock, idleClock, fmt } from './clock.js?v=202611161718';
-import { unlockAudio, beep, speak, stopSpeaking, openMicrophone, closeMicrophone, levelMeter, startRecording } from './audio.js?v=202611161718';
-import { scriptUrl, saveScriptUrl, isScriptUrl, ping, report, enqueue, onUpload, pendingUploads, resumeUploads } from './api.js?v=202611161718';
-import { saveRecording, allRecordings } from './store.js?v=202611161718';
-import { TEACHER_CODE, SCRIPT_VERSION, SCRIPT_APP } from './config.js?v=202611161718';
+import { PARTS, PARTS_ON, RESPONSES, INTRO, OPINION, TOTAL_POINTS, buildTimeline, timedSeconds, responseOf, resumeIndex } from './format.js?v=202611210055';
+import { VERSIONS, versionOf, pickVersion } from './versions.js?v=202611210055';
+import { clockHtml, runClock, idleClock, fmt } from './clock.js?v=202611210055';
+import { unlockAudio, beep, speak, stopSpeaking, openMicrophone, closeMicrophone, levelMeter, startRecording } from './audio.js?v=202611210055';
+import { scriptUrl, saveScriptUrl, isScriptUrl, ping, post, report, enqueue, onUpload, pendingUploads, resumeUploads } from './api.js?v=202611210055';
+import { saveRecording, allRecordings } from './store.js?v=202611210055';
+import { TEACHER_CODE, SCRIPT_VERSION, SCRIPT_APP } from './config.js?v=202611210055';
 
 const app = document.getElementById('app');
 const params = new URLSearchParams(location.search);
@@ -49,6 +49,8 @@ function clearSession() {
 const newId = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 const who = () => (S ? `${esc(S.student)} · Version ${S.version}` : 'Student name');
 const timeline = (n, scale = SCALE) => buildTimeline(versionOf(n), { scale });
+// The questions the exam gives (Questions 10 and 11 can be off: PARTS_ON in format.js).
+const RANGE = `Questions 7 to ${PARTS_ON.includes('opinion') ? 11 : PARTS_ON.includes('solution') ? 10 : 9}`;
 
 // ─── 1 · start ──────────────────────────────────────────────────────────────
 
@@ -58,10 +60,10 @@ function renderStart(error = '') {
     <section class="start-hero">
       <p class="eyebrow">${NAME}${DEMO ? ' · <b>demo</b>' : ''}</p>
       <h1>Speak when the clock says so.</h1>
-      <p class="lede">Questions 7 to 11, in the format of the TOEIC® Speaking test. A clock counts down the time to read
-        and to prepare; when it is time to speak you hear a beep, your microphone turns on, and it records until the time is up.</p>
+      <p class="lede">${RANGE}, in the format of the TOEIC® Speaking test. A clock counts down each step; when it is time
+        to speak you hear a beep, your microphone turns on, and it records until the time is up.</p>
       <ol class="parts-overview">
-        ${['info', 'solution', 'opinion']
+        ${PARTS_ON
           .map((id) => {
             const p = PARTS[id];
             return `<li><span class="po-label">${esc(p.label)}</span><span class="po-title">${esc(p.title)}</span>
@@ -82,15 +84,38 @@ function renderStart(error = '') {
   </main>`;
 }
 
-function submitStart(form) {
+// The teacher's link can name the version (?v=2). Otherwise the teacher's
+// script hands them out in turn (1, 2, 1, 2…), so a student never gets the
+// same version as the one who started just before. Without the script, or if
+// it doesn't answer in time, the version is one of them by chance.
+async function chooseVersion() {
+  const asked = versionOf(params.get('v'));
+  if (asked) return asked.n;
+  if (scriptUrl()) {
+    const late = new Promise((_, fail) => setTimeout(() => fail(new Error('no answer')), 10000));
+    try {
+      const given = versionOf((await Promise.race([post({ type: 'version' }), late])).version);
+      if (given) return given.n;
+    } catch {
+      /* an older script, or no answer: by chance */
+    }
+  }
+  return pickVersion();
+}
+
+async function submitStart(form) {
   const data = Object.fromEntries(new FormData(form));
   const err = form.querySelector('[data-error]');
   if (!String(data.student || '').trim()) {
     err.textContent = 'Write your full name.';
     return;
   }
-  // The teacher's link can name the version (?v=2); otherwise it is one of them by chance.
-  const version = pickVersion(params.get('v'));
+  if (form.dataset.busy) return;
+  form.dataset.busy = '1';
+  const button = form.querySelector('button[type="submit"]');
+  button.disabled = true;
+  button.textContent = 'Starting…';
+  const version = await chooseVersion();
   S = {
     student: data.student.trim(),
     version,
@@ -277,6 +302,8 @@ function roleHtml(solution) {
 
 const messageHtml = (solution) => `<div class="voice-message"><span>Voice message</span><p>${esc(solution.message)}</p></div>`;
 const questionHtml = (n, text) => `<p class="question"><span class="q-num">${n}</span>${esc(text)}</p>`;
+// Question 10 and the topics of Question 11 while they are answered.
+const goneHtml = (what) => `<p class="gone">The ${what} is no longer on the screen. Answer with what you prepared.</p>`;
 
 // What the student sees at a step of version `v`.
 function taskHtml(step, v, label = who()) {
@@ -289,21 +316,23 @@ function taskHtml(step, v, label = who()) {
   const head = `<p class="task-label">${esc(where)}</p><h2>${esc(p.title)}</h2>`;
   const directions = `<p class="directions"><b>Directions:</b> ${esc(p.directions)}</p>`;
   if (step.part === 'info') {
-    // The information is on the screen only while its reading clock runs: it
-    // appears when the clock starts (during the directions there is nothing to
-    // read, so everyone gets the same 30 seconds) and is gone when the time is
-    // up. The questions are answered from memory, as the teacher asked.
+    // The information appears when its reading clock starts (during the
+    // directions there is nothing to read, so everyone gets the same 30
+    // seconds) and stays on the screen to the end of the part. The caller and
+    // the questions are only heard, never shown, as the teacher asked.
     if (step.type === 'part') return head + directions;
-    if (step.type === 'prep') return `<div class="info-step">${head}${infoHtml(v.info)}</div>`;
-    const caller = step.narrator ? `<p class="narrator"><span>Caller</span>${esc(v.info.narrator)}</p>` : '';
-    const question = step.question ? questionHtml(step.question, v.info.questions[step.question - 7]) : '';
-    return `<div class="info-step">${head}${caller}${question}</div>`;
+    return `<div class="info-step">${head}${infoHtml(v.info)}</div>`;
   }
+  // Question 10 and each topic of Question 11: the message or the topic is on
+  // the screen while the students listen and prepare, and gone while they
+  // answer (as the teacher asked). Who they answer as stays.
   if (step.part === 'solution') {
     if (step.type === 'part') return head + directions + roleHtml(v.solution);
+    if (step.type === 'response') return head + roleHtml(v.solution) + goneHtml('voice message');
     return head + roleHtml(v.solution) + messageHtml(v.solution);
   }
   if (step.type === 'part') return head + directions;
+  if (step.type === 'response') return head + goneHtml('topic');
   return head + questionHtml(step.topic, v.opinion[step.topic - 1]);
 }
 
@@ -477,19 +506,21 @@ onUpload(({ qid, key, status, error }) => {
 
 // ─── teacher ────────────────────────────────────────────────────────────────
 
-// Everything a version asks, to read before the exam and while grading.
+// Everything a version asks (in the parts the exam gives), to read before the
+// exam and while grading. The teacher sees the caller and the questions, which
+// the students only hear.
 function versionHtml(v) {
+  const part = {
+    info: () => `${infoHtml(v.info)}
+      <p class="narrator"><span>Caller (heard)</span>${esc(v.info.narrator)}</p>
+      <p class="muted small">The questions (heard, not shown):</p>
+      <ol class="tv-list" start="7">${v.info.questions.map((q) => `<li>${esc(q)}</li>`).join('')}</ol>`,
+    solution: () => `${roleHtml(v.solution)}${messageHtml(v.solution)}`,
+    opinion: () => `<ol class="tv-list">${v.opinion.map((t) => `<li>${esc(t)}</li>`).join('')}</ol>`,
+  };
   return `<section class="tv">
     <h3>Version ${v.n}</h3>
-    <h4>${esc(PARTS.info.label)} · ${esc(PARTS.info.title)}</h4>
-    ${infoHtml(v.info)}
-    <p class="narrator"><span>Caller</span>${esc(v.info.narrator)}</p>
-    <ol class="tv-list" start="7">${v.info.questions.map((q) => `<li>${esc(q)}</li>`).join('')}</ol>
-    <h4>${esc(PARTS.solution.label)} · ${esc(PARTS.solution.title)}</h4>
-    ${roleHtml(v.solution)}
-    ${messageHtml(v.solution)}
-    <h4>${esc(PARTS.opinion.label)} · ${esc(PARTS.opinion.title)}</h4>
-    <ol class="tv-list">${v.opinion.map((t) => `<li>${esc(t)}</li>`).join('')}</ol>
+    ${PARTS_ON.map((id) => `<h4>${esc(PARTS[id].label)} · ${esc(PARTS[id].title)}</h4>${part[id]()}`).join('')}
   </section>`;
 }
 
@@ -514,9 +545,10 @@ function renderTeacher(message = '') {
     <section class="card">
       <h2>2 · The links for your students</h2>
       <p>They carry your script, so the recordings go to your sheet. Students write their full name and start. With the
-        first link each student gets one of the ${VERSIONS.length} versions by chance; the others give everyone the same version.
-        The sheet says which version each student had.</p>
-      ${linkRow('Any version', link())}
+        first link your script hands out the versions in turn: if a student gets version 1, the next one to start gets
+        version 2, and so on (the first one is by chance). The others give everyone the same version. The sheet says which
+        version each student had.</p>
+      ${linkRow('Versions in turn', link())}
       ${VERSIONS.map((v) => linkRow(`Version ${v.n}`, link(`v=${v.n}`))).join('')}
     </section>
     <section class="card">
@@ -527,7 +559,8 @@ function renderTeacher(message = '') {
     </section>
     <section class="card">
       <h2>4 · The versions</h2>
-      <p class="muted small">What each version asks. Questions 7–9 are scored 0–3; Questions 10 and 11, 0–5 (${TOTAL_POINTS} points in all).</p>
+      <p class="muted small">What each version asks. ${PARTS_ON.length > 1 ? 'Questions 7–9 are scored 0–3; Questions 10 and 11, 0–5' : 'Each question is scored 0–3'}
+        (${TOTAL_POINTS} points in all).</p>
       ${VERSIONS.map(versionHtml).join('')}
     </section>
     <section class="card">
@@ -581,7 +614,7 @@ function renderCode(error = '') {
 // recorded or sent.
 
 const PREVIEW = { version: VERSIONS[0].n, steps: timeline(VERSIONS[0].n, 1), at: 0, clock: null };
-const PARTS_ORDER = ['info', 'solution', 'opinion'];
+const PARTS_ORDER = PARTS_ON;
 
 // A short name for a step, for its button.
 function stepName(step) {

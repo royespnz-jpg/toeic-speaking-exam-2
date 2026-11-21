@@ -989,6 +989,16 @@ details summary {
 .voice-message p {
   margin: 0;
 }
+/* Questions 10 and 11 while they are answered: the message or the topic is gone */
+.gone {
+  max-width: 62ch;
+  margin: 16px 0 0;
+  padding: 14px 18px;
+  border-radius: 14px;
+  border: 1px dashed var(--line-2);
+  color: var(--muted);
+  font-size: 0.98rem;
+}
 
 /* the teacher's page: what each version asks */
 .tv {

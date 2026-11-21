@@ -4,7 +4,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import vm from 'node:vm';
 import { splitCode, stripMarkers, MAX_LINES } from '../scripts/split-gs.mjs';
 import { answerRows, examRows } from '../scripts/exam-gs.mjs';
-import { RESPONSES, TOTAL_POINTS } from '../js/format.js';
+import { RESPONSES, TOTAL_POINTS, PARTS_ON } from '../js/format.js';
 import { VERSIONS } from '../js/versions.js';
 import { SCRIPT_VERSION, SCRIPT_APP } from '../js/config.js';
 
@@ -154,9 +154,29 @@ test('setup makes the sheets, the rubric, the exam and the Drive folder', () => 
   assert.ok(folders.has(ROOT));
   assert.ok(!folders.has('Speaking Exam — Recordings'), 'never the first exam’s folder');
   const info = JSON.parse(ctx.doGet().body);
-  assert.deepEqual(info, { ok: true, app: 'Speaking Exam II', sheet: 'Speaking 2026', version: 1 });
+  assert.deepEqual(info, { ok: true, app: 'Speaking Exam II', sheet: 'Speaking 2026', version: 2 });
   assert.equal(info.app, SCRIPT_APP, 'the Teacher page knows this script by its name');
   assert.ok(info.version >= SCRIPT_VERSION, 'the page works with this script');
+});
+
+test('the general link: the script hands out the versions in turn, the first one by chance', () => {
+  for (const [random, first] of [[0.1, 1], [0.9, 2]]) {
+    const { ctx, post, props } = makeEnv();
+    vm.runInContext(`Math.random = () => ${random};`, ctx);
+    const other = first === 1 ? 2 : 1;
+    assert.deepEqual([1, 2, 3, 4, 5].map(() => post({ type: 'version' }).version), [first, other, first, other, first]);
+    assert.equal(props.get('LAST_VERSION'), String(first));
+  }
+  // With any number of versions: each one in order, then back to the first.
+  const { post } = makeEnv();
+  const turns = Array.from({ length: VERSIONS.length + 1 }, () => post({ type: 'version' }).version);
+  turns.slice(1).forEach((n, i) => assert.equal(n, (turns[i] % VERSIONS.length) + 1));
+  assert.equal(turns[VERSIONS.length], turns[0]);
+  // A remembered version that no longer exists starts again by chance.
+  const { post: post2, props: props2 } = makeEnv();
+  props2.set('LAST_VERSION', '9');
+  const given = post2({ type: 'version' }).version;
+  assert.ok(VERSIONS.some((v) => v.n === given), `version ${given}`);
 });
 
 test('the exam in the script is the one on the page', () => {
@@ -165,18 +185,20 @@ test('the exam in the script is the one on the page', () => {
   assert.deepEqual(plain(vm.runInContext('ANSWERS', ctx)), answerRows(), 'run: npm run gs');
   assert.deepEqual(plain(vm.runInContext('QUESTIONS', ctx)), RESPONSES.map((r) => r.id));
   assert.equal(vm.runInContext('TOTAL', ctx), TOTAL_POINTS);
-  // Every version: the schedule, its details, the caller, three questions, the role, the message and three topics.
+  // Every version, in the parts the exam gives (for now Questions 7–9): the schedule, its details, the caller and
+  // three questions (with Questions 10 and 11, also the role, the message and three topics).
+  const rows = { info: (v) => 1 + v.info.rows.length + v.info.details.length + 1 + 3, solution: () => 2, opinion: () => 3 };
   for (const v of VERSIONS) {
     const mine = examRows().filter(([n]) => n === v.n);
-    assert.equal(mine.length, 1 + v.info.rows.length + v.info.details.length + 1 + 3 + 2 + 3);
+    assert.equal(mine.length, PARTS_ON.reduce((n, id) => n + rows[id](v), 0));
     assert.deepEqual(mine[0], [v.n, 'Information', v.info.title]);
-    assert.deepEqual(mine.at(-1), [v.n, 'Question 11 · Topic 3', v.opinion[2]]);
+    assert.deepEqual(mine.at(-1), PARTS_ON.includes('opinion') ? [v.n, 'Question 11 · Topic 3', v.opinion[2]] : [v.n, 'Question 9', v.info.questions[2]]);
   }
   // Prices keep their "$" (a careless replace() would read "$4" as a pattern).
   assert.ok(examRows().some(([, , text]) => text === '$60 ($45 for students)'));
 });
 
-test('an exam: start, seven answers in the student’s folder, finish', () => {
+test('an exam: start, its answers in the student’s folder, finish', () => {
   const { post, sheets, files } = makeEnv();
   assert.equal(post({ type: 'start', ...who, startedAt: '2026-11-20T15:00:00Z' }).ok, true);
   assert.equal(post({ type: 'start', ...who }).duplicate, true);
@@ -189,23 +211,23 @@ test('an exam: start, seven answers in the student’s folder, finish', () => {
   const again = post({ type: 'recording', ...who, qid: 'q8', mime: 'audio/webm', audio });
   assert.equal(again.duplicate, true);
   assert.equal(again.url, 'https://drive/file/1');
-  assert.equal(files.length, 7);
+  assert.equal(files.length, RESPONSES.length);
   assert.equal(files[0].folder, `${ROOT}/Ana Pérez · V2 · x7y8z9`);
   assert.deepEqual(files.map((f) => f.blob.name), RESPONSES.map((r) => `${r.label}.webm`));
-  assert.equal(files[3].description, 'Prompt of q10');
+  assert.equal(files[2].description, 'Prompt of q9');
   const responses = sheets.get('Responses');
-  assert.equal(responses.data.length, 8);
+  assert.equal(responses.data.length, 1 + RESPONSES.length);
   assert.deepEqual(responses.data[1].slice(1, 6), ['Ana Pérez', 2, 'Question 7', 'Prompt of q7', 60]);
-  assert.deepEqual(responses.data.slice(1).map((row) => row[8]), [3, 3, 3, 5, 5, 5, 5], 'the highest score of each answer');
+  assert.deepEqual(responses.data.slice(1).map((row) => row[8]), RESPONSES.map((r) => r.max), 'the highest score of each answer');
   assert.equal(responses.data[1][10], who.attempt);
   assert.match(responses.formulas.get('2,7'), /^=HYPERLINK\("https:\/\/drive\/file\/0","▶ Listen"\)$/);
   // The score cell takes only 0 to the highest score of its question.
   assert.deepEqual(plain(responses.rules.get('2,8')), { min: 0, max: 3, allowInvalid: false, help: 'A number from 0 to 3.' });
-  assert.equal(responses.rules.get('5,8').max, 5);
+  assert.equal(responses.rules.get('4,8').max, 3);
 
   assert.equal(post({ type: 'finish', ...who, leftPage: 1, resumed: 0, finishedAt: '2026-11-20T15:12:00Z' }).ok, true);
   const exam = sheets.get('Exams').data[1];
-  assert.deepEqual([exam[1], exam[2], exam[3], exam[4], exam[6], exam[7], exam[10]], ['Ana Pérez', 2, 'finished', 7, 1, 0, who.attempt]);
+  assert.deepEqual([exam[1], exam[2], exam[3], exam[4], exam[6], exam[7], exam[10]], ['Ana Pérez', 2, 'finished', RESPONSES.length, 1, 0, who.attempt]);
   assert.match(exam[9], /^https:\/\/drive\//);
   // The total adds the scores of this attempt, and stays empty until one is given.
   assert.equal(sheets.get('Exams').formulas.get('2,9'), '=IF(COUNTIFS(Responses!K:K,K2,Responses!H:H,"<>")=0,"",SUMIFS(Responses!H:H,Responses!K:K,K2))');
@@ -253,7 +275,7 @@ test('the answer is saved even if the score rule can’t be set', () => {
   ctx.SpreadsheetApp.newDataValidation = () => {
     throw new Error('not here');
   };
-  const res = post({ type: 'recording', ...who, qid: 'q10', mime: 'audio/webm', audio });
+  const res = post({ type: 'recording', ...who, qid: 'q9', mime: 'audio/webm', audio });
   assert.equal(res.ok, true, res.error);
   assert.equal(sheets.get('Responses').data.length, 2);
 });

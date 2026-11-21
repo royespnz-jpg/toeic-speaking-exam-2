@@ -12,9 +12,11 @@ export const RETIRED_URLS = [];
 // password: anyone who reads the page's code can find it.
 export const TEACHER_CODE = '1234';
 
-// The oldest google-apps-script/Code.gs this page works with (its doGet says
-// which one is deployed).
-export const SCRIPT_VERSION = 1;
+// The google-apps-script/Code.gs this page expects (its doGet says which one
+// is deployed). Version 2 hands out the versions in turn; with an older one
+// the exam still works (each student gets a version by chance), and the
+// Teacher page asks for the update.
+export const SCRIPT_VERSION = 2;
 
 // What the teacher's script calls itself (its doGet says it): the Teacher page
 // uses it to tell this exam's script from another exam's.
